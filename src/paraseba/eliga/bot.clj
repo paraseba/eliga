@@ -25,13 +25,18 @@
 (defn- extract-name [s]
   (last (string/split s #"/")))
 
+(def mentioned?
+  [mention-name message]
+  (re-find (java.util.regex.Pattern/compile
+             (str "(^|\\s+)@" mention-name "(\\s+|$)"))
+           message)
+ )
+
 (defn- packet->message [mention-name packet]
   {:from (extract-name (.getFrom packet))
    :body (.getBody packet)
    :mention? (boolean
-               (re-find (java.util.regex.Pattern/compile
-                          (str "(^|\\s+)@" mention-name "(\\s+|$)"))
-                        (.getBody packet)))})
+               (mentioned? mention-name (.getBody packet)))})
 
 (defn- handle? [msg bot]
   (not (= (:from msg) (:nick bot))))
@@ -62,27 +67,6 @@
                              (processPacket [this packet]
                                (process-packet bot room packet)))))
     bot))
-
-(defn start-bot [{:keys [nick user password rooms api-token] :as config} handler]
-  (let [connection (doto (XMPPConnection. "chat.hipchat.com")
-                     .connect
-                     (.login user password "bot"))
-        pingmanager (doto (KeepAliveManager/getInstanceFor connection)
-                      (.setPingInterval 60000))
-
-        bot (reduce enter-room
-                    (assoc config
-                           :handler handler
-                           :connection connection
-                           :ping-manager pingmanager
-                           :user-details (user-details api-token user))
-                    rooms)]
-    (doseq [[chat room] (map vector (vals (:chats bot)) rooms)]
-      (.addMessageListener chat
-                           (reify PacketListener
-                             (processPacket [this packet]
-                               (process-packet bot room packet)))))
-    {}))
 
 (defn stop-bot [bot]
   (.disconnect (:connection bot)))
