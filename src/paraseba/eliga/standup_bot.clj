@@ -1,22 +1,42 @@
 (ns paraseba.eliga.standup-bot
+  (:import org.joda.time.DateTime)
   (:require
     [clojure.string :as string]
     [postal.core :as postal]
     [paraseba.eliga.bot :as bot]))
 
+(defprotocol StandupState
+  (add-status [_ user status-data])
+  (standup-as-map [_])
+  (standup-done [_]))
+
+(deftype MemoryStandupState [state]
+  StandupState
+  (add-status [_ user status-data]
+    (assert (string? user))
+    (assert (every? #(string? (:message %)) (vals status-data)))
+    (assert (every? #(instance? DateTime (:timestamp %)) (vals status-data)))
+    (assert (every? #{:yesterday :today} (keys status-data)))
+    (swap! state update-in [user] merge status-data))
+  (standup-as-map [_] @state)
+  (standup-done [_] (reset! state {})))
+
+(defn empty-memory-standup-state [] (->MemoryStandupState (atom {})))
+
 (defn- parse-message
   [message]
   (let [y-index (.lastIndexOf message "#yesterday")
-        t-index (.lastIndexOf message "#today")]
+        t-index (.lastIndexOf message "#today")
+        now (DateTime.)]
     (merge
       (when (> y-index -1)
         (let [y-start (+ y-index (count "#yesterday "))
               y-end (if (> y-index t-index) (count message) t-index)]
-        {:yesterday (string/trim (subs message y-start y-end))}))
+        {:yesterday {:message (string/trim (subs message y-start y-end)) :timestamp now}}))
       (when (> t-index -1)
         (let [t-start (+ t-index (count "#today "))
               t-end (if (> t-index y-index) (count message) y-index)]
-        {:today (string/trim (subs message t-start t-end))})))))
+        {:today {:message (string/trim (subs message t-start t-end)) :timestamp now}})))))
 
 (comment
 
@@ -29,9 +49,7 @@
 (defn- apply-message!
   [state message]
   (when (:mention? message)
-    (swap! state update-in
-           [:standups (:from message)]
-           merge (parse-message (:body message)))))
+    (add-status state (:from message) (parse-message (:body message)))))
 
 (defn- status-ready?
   [[_ status]]
@@ -45,8 +63,8 @@
   )
 
 (defn- standup-ready?
-  [users state]
-  (->> (:standups state)
+  [users statuses]
+  (->> statuses
        (filter status-ready?)
        (map key)
        set
@@ -66,8 +84,8 @@
   (let [format-user
         (fn [[user status]]
           (str (format "%s:\n" (team-members user))
-               (format "  Yesterday: %s\n" (:yesterday status))
-               (format "  Today: %s\n" (:today status))))]
+               (format "  Yesterday: %s\n" (-> status :yesterday :message))
+               (format "  Today: %s\n" (-> status :today :message))))]
 
     (str (format "Standup updates for %s\n" team-name)
          (string/join "\n" (map format-user (sort-by key statuses))))))
@@ -83,13 +101,13 @@
                             :body body})))
 
 (defn start [group-chat users config]
-  (let [state (atom {})]
+  (let [state (empty-memory-standup-state)]
     (bot/connect group-chat config
                 (fn [session message]
                   (apply-message! state message)
-                  (when (standup-ready? users @state)
-                    ((:on-ready config) session (:standups @state))
-                    (swap! state dissoc :standups))))))
+                  (when (standup-ready? users (standup-as-map state))
+                    ((:on-ready config) session (standup-as-map state))
+                    (standup-done state))))))
 
 (defn -main [& args]
   (start (bot/->Hipchat)
@@ -98,8 +116,6 @@
           :rooms ["98902_eliga"] :nick "Eliga bot"
           :api-token "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P"})
   )
-
-
 (comment
 
   (def hipchat (bot/->Hipchat))
@@ -122,7 +138,7 @@
 
   (bot/disconnect hipchat session)
 
-  (def mybot (start-bot 
+  (def mybot (start-bot
                (fn [bot message]
                  (group-chat bot (:room message)
                              (str "Te escuche " (:from message) ": "
