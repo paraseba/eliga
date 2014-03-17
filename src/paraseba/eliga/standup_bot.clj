@@ -61,13 +61,24 @@
 
  )
 
+(defn format-standup-message [statuses team-name team-members]
+  (let [format-user
+        (fn [[user status]]
+          (str (format "%s:\n" (team-members user))
+               (format "  Yesterday: %s\n" (:yesterday status))
+               (format "  Today: %s\n" (:today status))))]
+
+    (str (format "Standup updates for %s\n" team-name)
+         (string/join "\n" (map format-user (sort-by key statuses))))))
+
 (defn start [group-chat users config]
   (let [state (atom {})]
     (bot/connect group-chat config
                 (fn [session message]
                   (apply-message! state message)
                   (when (standup-ready? users @state)
-                    ((:on-ready config) session (:standups @state)))))))
+                    ((:on-ready config) session (:standups @state))
+                    (swap! state dissoc :standups))))))
 
 (defn -main [& args]
   (start (bot/->Hipchat)
@@ -75,4 +86,28 @@
          {:user "98902_725271" :password "thebot"
           :rooms ["98902_eliga"] :nick "Eliga bot"
           :api-token "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P"})
+  )
+
+
+(comment
+
+  (def hipchat (bot/->Hipchat))
+  (def session
+    (start hipchat  ["Sebastian Galkin" "Nicolás Berger"]
+           {:user "98902_725271" :password "thebot"
+            :rooms ["98902_eliga"] :nick "Eliga bot"
+            :api-token "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P"
+            :on-ready (fn [session statuses]
+                        (bot/write hipchat session "98902_eliga"
+                                   (format-standup-message statuses "my team"
+                                                           identity )))}))
+
+  (bot/disconnect hipchat session)
+
+  (def mybot (start-bot 
+               (fn [bot message]
+                 (group-chat bot (:room message)
+                             (str "Te escuche " (:from message) ": "
+                                  (:body message))))))
+
   )

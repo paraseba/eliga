@@ -56,8 +56,7 @@
         noop (fn [& _])
         nico-session (connect group-chat {:user {:id "nico" :name "Nicolas Foo"}} noop)
         seba-session (connect group-chat {:user {:id "seba" :name "Sebastian Bar"}} noop)
-        foo-session  (connect group-chat {:user {:id "foo" :name "Foo Bar"}} noop)
-        ]
+        foo-session  (connect group-chat {:user {:id "foo" :name "Foo Bar"}} noop)]
 
     (write group-chat nico-session "team" "@eliga #yesterday I didn't do much")
     (write group-chat nico-session "team" "@eliga #today I'll do a lot")
@@ -66,17 +65,11 @@
 
     (write group-chat foo-session  "team" "@eliga #yesterday foo did X #today foo will do Y")
 
-    (is @done?)
-    
-
-    
-
-    )
-  )
+    (is @done?)))
 
 
 (comment
-(is (= (last (get-all-messages group-chat "team"))
+  (is (= (last (get-all-messages group-chat "team"))
            {"eliga"
             (str "Standup updates for team:\n"
                  "Foo Bar:\n"

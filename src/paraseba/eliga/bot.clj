@@ -76,12 +76,8 @@
 
 
 (defprotocol GroupChat
-  (connect [this config handler]
-           ;; returns session
-           )
-
+  (connect [this config handler])
   (disconnect [this session])
-
   (write [this session room msg]))
 
 (deftype Hipchat []
