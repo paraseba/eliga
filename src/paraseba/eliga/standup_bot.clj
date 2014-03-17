@@ -1,6 +1,7 @@
 (ns paraseba.eliga.standup-bot
   (:require
     [clojure.string :as string]
+    [postal.core :as postal]
     [paraseba.eliga.bot :as bot]))
 
 (defn- parse-message
@@ -71,6 +72,16 @@
     (str (format "Standup updates for %s\n" team-name)
          (string/join "\n" (map format-user (sort-by key statuses))))))
 
+(defn send-standup-email [statuses team-name team-members email-config]
+  (let [date (java.util.Date.)
+        subject (format "tag:standup %s standup %s" team-name date)
+        body (format-standup-message statuses team-name team-members)]
+    (postal/send-message (dissoc email-config :from :to)
+                           {:from (:from email-config)
+                            :to (:to email-config)
+                            :subject subject
+                            :body body})))
+
 (defn start [group-chat users config]
   (let [state (atom {})]
     (bot/connect group-chat config
@@ -100,7 +111,14 @@
             :on-ready (fn [session statuses]
                         (bot/write hipchat session "98902_eliga"
                                    (format-standup-message statuses "my team"
-                                                           identity )))}))
+                                                           identity ))
+                        (send-standup-email statuses "my team" identity
+                                            {:host "mailtrap.io"
+                                             :port 2525
+                                             :user "eliga-3ebf39ee87f3a841"
+                                             :pass "d1ddbe937212347e"
+                                             :to ["myteam@example.com"]
+                                             :from "eliga@example.com"}))}))
 
   (bot/disconnect hipchat session)
 

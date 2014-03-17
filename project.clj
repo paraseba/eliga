@@ -7,4 +7,5 @@
                  [org.igniterealtime.smack/smack "3.4.1"]
                  [org.igniterealtime.smack/smackx "3.4.1"]
                  [clj-http "0.9.1"]
+                 [com.draines/postal "1.11.1"]
                  ])
