@@ -1,5 +1,7 @@
 (ns paraseba.eliga.standup-bot
-  (:require [paraseba.eliga.bot :as bot]))
+  (:require
+    [clojure.string :as string]
+    [paraseba.eliga.bot :as bot]))
 
 (defn- parse-message
   [message]
@@ -9,11 +11,11 @@
       (when (> y-index -1)
         (let [y-start (+ y-index (count "#yesterday "))
               y-end (if (> y-index t-index) (count message) t-index)]
-        {:yesterday (subs message y-start y-end)}))
+        {:yesterday (string/trim (subs message y-start y-end))}))
       (when (> t-index -1)
         (let [t-start (+ t-index (count "#today "))
               t-end (if (> t-index y-index) (count message) y-index)]
-        {:today (subs message t-start t-end)})))))
+        {:today (string/trim (subs message t-start t-end))})))))
 
 (comment
 
@@ -59,21 +61,13 @@
 
  )
 
-(defn- format-message
-  [state]
-  (pr-str state))
-
-(defn- send-standup
-  [group-chat session state room]
-  (bot/write group-chat session room (format-message state)))
-
 (defn start [group-chat users config]
   (let [state (atom {})]
     (bot/connect group-chat config
                 (fn [session message]
                   (apply-message! state message)
                   (when (standup-ready? users @state)
-                    (send-standup group-chat session @state (-> config :rooms first)))))))
+                    ((:on-ready config) session (:standups @state)))))))
 
 (defn -main [& args]
   (start (bot/->Hipchat)

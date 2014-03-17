@@ -25,7 +25,7 @@
 (defn- extract-name [s]
   (last (string/split s #"/")))
 
-(def mentioned?
+(defn mentioned?
   [mention-name message]
   (re-find (java.util.regex.Pattern/compile
              (str "(^|\\s+)@" mention-name "(\\s+|$)"))

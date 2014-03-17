@@ -17,10 +17,12 @@
   (write [this {:keys [config]} room msg]
     (swap! state update-in [:messages room] conj {(-> config :user :id) msg})
     (doseq [session (:sessions @state) :when (not= (-> config :user :id) (-> session :config :user :id))]
-      ((:handler session) session {:from (-> config :user :id)
-                        :body msg
-                        :mention? (mentioned? (-> session :config :user :id) msg)
-                        :room room}))))
+      ((:handler session)
+       session
+       {:from (-> config :user :id)
+        :body msg
+        :mention? (mentioned? (-> session :config :user :id) msg)
+        :room room}))))
 
 (defn get-all-messages [hipchat room]
   (-> hipchat .state deref :messages (get room) reverse))
@@ -30,9 +32,27 @@
 
 (deftest standup-info-gathering
   (let [group-chat (stub-hipchat)
+        done? (atom false)
         bot (standup/start group-chat
-                   ["nico" "seba" "foo"]
-                   {:rooms ["team"] :user {:id "eliga" :name "Eliga bot"}})
+                           ["nico" "seba" "foo"]
+                           {:rooms ["team"] :user {:id "eliga" :name "Eliga bot"}
+                            :on-ready
+                            (fn [session statuses]
+                              (reset! done? true)
+                              (is (not (nil? session)))
+                              (is (= #{"nico" "seba" "foo"} (set (keys statuses))))
+                              (is (= (-> statuses (get "nico") :yesterday)
+                                     "I didn't do much"))
+                              (is (= (-> statuses (get "nico") :today)
+                                     "I'll do a lot"))
+                              (is (= (-> statuses (get "seba") :yesterday)
+                                     "easy stuff"))
+                              (is (= (-> statuses (get "seba") :today)
+                                     "hard stuff"))
+                              (is (= (-> statuses (get "foo") :yesterday)
+                                     "foo did X"))
+                              (is (= (-> statuses (get "foo") :today)
+                                     "foo will do Y")))})
         noop (fn [& _])
         nico-session (connect group-chat {:user {:id "nico" :name "Nicolas Foo"}} noop)
         seba-session (connect group-chat {:user {:id "seba" :name "Sebastian Bar"}} noop)
@@ -46,9 +66,17 @@
 
     (write group-chat foo-session  "team" "@eliga #yesterday foo did X #today foo will do Y")
 
-    (prn (get-all-messages group-chat "team"))
+    (is @done?)
+    
 
-    (is (= (last (get-all-messages group-chat "team"))
+    
+
+    )
+  )
+
+
+(comment
+(is (= (last (get-all-messages group-chat "team"))
            {"eliga"
             (str "Standup updates for team:\n"
                  "Foo Bar:\n"
@@ -62,12 +90,6 @@
                  "seba:\n"
                  "  Yesterday: easy stuff\n"
                  "  Today: hard stuff\n")}))
-
-    )
-  )
-
-
-(comment
 
   (.printStackTrace *e)
 
