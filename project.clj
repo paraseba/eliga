@@ -7,6 +7,6 @@
                  [org.igniterealtime.smack/smack "3.4.1"]
                  [org.igniterealtime.smack/smackx "3.4.1"]
                  [clj-http "0.9.1"]
-                 [joda-time/joda-time "2.4"]
+                 [joda-time/joda-time "2.3"]
                  [com.draines/postal "1.11.1"]
                  ])
