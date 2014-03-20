@@ -3,25 +3,8 @@
   (:require
     [clojure.string :as string]
     [postal.core :as postal]
-    [paraseba.eliga.bot :as bot]))
-
-(defprotocol StandupState
-  (add-status [_ user status-data])
-  (standup-as-map [_])
-  (standup-done [_]))
-
-(deftype MemoryStandupState [state]
-  StandupState
-  (add-status [_ user status-data]
-    (assert (string? user))
-    (assert (every? #(string? (:message %)) (vals status-data)))
-    (assert (every? #(instance? DateTime (:timestamp %)) (vals status-data)))
-    (assert (every? #{:yesterday :today} (keys status-data)))
-    (swap! state update-in [user] merge status-data))
-  (standup-as-map [_] @state)
-  (standup-done [_] (reset! state {})))
-
-(defn empty-memory-standup-state [] (->MemoryStandupState (atom {})))
+    [paraseba.eliga.bot :as bot]
+    [paraseba.eliga.standup-state :as sstate]))
 
 (defn- parse-message
   [message]
@@ -49,7 +32,7 @@
 (defn- apply-message!
   [state message]
   (when (:mention? message)
-    (add-status state (:from message) (parse-message (:body message)))))
+    (sstate/add-status state (:room message) (:from message) (parse-message (:body message)))))
 
 (defn- status-ready?
   [[_ status]]
@@ -101,13 +84,13 @@
                             :body body})))
 
 (defn start [group-chat users config]
-  (let [state (empty-memory-standup-state)]
+  (let [state (sstate/empty-memory-standup-state)]
     (bot/connect group-chat config
                 (fn [session message]
                   (apply-message! state message)
-                  (when (standup-ready? users (standup-as-map state))
-                    ((:on-ready config) session (standup-as-map state))
-                    (standup-done state))))))
+                  (when (standup-ready? users (sstate/standup-as-map state (-> config :rooms first)))
+                    ((:on-ready config) session (sstate/standup-as-map state (-> config :rooms first)))
+                    (sstate/standup-done state (-> config :rooms first)))))))
 
 (defn -main [& args]
   (start (bot/->Hipchat)
