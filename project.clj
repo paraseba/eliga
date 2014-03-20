@@ -9,4 +9,5 @@
                  [clj-http "0.9.1"]
                  [joda-time/joda-time "2.3"]
                  [com.draines/postal "1.11.1"]
+                 [clojurewerkz/elastisch "1.4.0"]
                  ])
