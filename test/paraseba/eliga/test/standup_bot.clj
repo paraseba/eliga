@@ -30,6 +30,22 @@
 (defn stub-hipchat []
   (->StubHipchat (atom {})))
 
+(defn- noop [& _])
+
+(deftest acknowledge-message
+  (let [group-chat (stub-hipchat)
+        bot (standup/start group-chat
+                           ["nico"]
+                           {:rooms ["team"] :user {:id "eliga" :name "Eliga"}
+                            :on-ready noop})
+        session (connect group-chat {:user {:id "nico" :name "Nicolas"}} noop)]
+    (write group-chat session "team" "@eliga how are you?")
+    (is (= (last (get-all-messages group-chat "team"))
+           {"eliga" "@nico That didn't look like a standup update..."}))
+    (write group-chat session "team" "@eliga #yesterday Way too much")
+    (is (= (last (get-all-messages group-chat "team"))
+           {"eliga" "@nico standup update received"}))))
+
 (deftest standup-info-gathering
   (let [group-chat (stub-hipchat)
         done? (atom false)
@@ -53,7 +69,6 @@
                                      "foo did X"))
                               (is (= (-> statuses (get "foo") :today :message)
                                      "foo will do Y")))})
-        noop (fn [& _])
         nico-session (connect group-chat {:user {:id "nico" :name "Nicolas Foo"}} noop)
         seba-session (connect group-chat {:user {:id "seba" :name "Sebastian Bar"}} noop)
         foo-session  (connect group-chat {:user {:id "foo" :name "Foo Bar"}} noop)]
@@ -66,7 +81,6 @@
     (write group-chat foo-session  "team" "@eliga #yesterday foo did X #today foo will do Y")
 
     (is @done?)))
-
 
 (comment
   (is (= (last (get-all-messages group-chat "team"))
@@ -87,6 +101,8 @@
   (.printStackTrace *e)
 
   (standup-info-gathering)
+
+  (acknowledge-message)
 
   (let [hipchat (stub-hipchat)
         nico-session (connect hipchat {:user {:id "nico" :name "Nicolas Foo"}} (fn [& rest] (prn "hola" rest)))

@@ -27,12 +27,22 @@
   (parse-message "@eliga #today everything")
   (parse-message "@eliga #today idk #today everything")
   (parse-message "@eliga #today idk #yesterday everything")
+  (parse-message "@eliga sending an invalid update")
   )
 
+(defn- answer-message
+  [group-chat session message answer]
+  (let [user-handle (str "@" (:from message))]
+    (bot/write group-chat session (:room message) (str user-handle " " answer))))
+
 (defn- apply-message!
-  [state message]
+  [group-chat session state message]
   (when (:mention? message)
-    (sstate/add-status state (:room message) (:from message) (parse-message (:body message)))))
+    (if-let [updates (parse-message (:body message))]
+      (do
+        (sstate/add-status state (:room message) (:from message) updates)
+        (answer-message group-chat session message "standup update received"))
+      (answer-message group-chat session message "That didn't look like a standup update..."))))
 
 (defn- status-ready?
   [[_ status]]
@@ -87,7 +97,7 @@
   (let [state (sstate/empty-memory-standup-state)]
     (bot/connect group-chat config
                 (fn [session message]
-                  (apply-message! state message)
+                  (apply-message! group-chat session state message)
                   (when (standup-ready? users (sstate/standup-as-map state (-> config :rooms first)))
                     ((:on-ready config) session (sstate/standup-as-map state (-> config :rooms first)))
                     (sstate/standup-done state (-> config :rooms first)))))))
