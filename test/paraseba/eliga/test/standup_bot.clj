@@ -44,7 +44,10 @@
            {"eliga" "@nico That didn't look like a standup update..."}))
     (write group-chat session "team" "@eliga #yesterday Way too much")
     (is (= (last (get-all-messages group-chat "team"))
-           {"eliga" "@nico standup update received"}))))
+           {"eliga" "@nico #yesterday update received"}))
+    (write group-chat session "team" "@eliga #yesterday Way too much #today I'll work on that bug")
+    (is (= (last (get-all-messages group-chat "team"))
+           {"eliga" "@nico #yesterday & #today update received"}))))
 
 (deftest standup-info-gathering
   (let [group-chat (stub-hipchat)

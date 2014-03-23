@@ -35,13 +35,19 @@
   (let [user-handle (str "@" (:from message))]
     (bot/write group-chat session (:room message) (str user-handle " " answer))))
 
+(defn- ack-status-received
+  [group-chat session message updates]
+  (let [update-titles (map #(str "#" (name %)) (-> updates keys sort reverse))]
+    (answer-message group-chat session message
+                    (str (clojure.string/join " & " update-titles) " update received"))))
+
 (defn- apply-message!
   [group-chat session state message]
   (when (:mention? message)
     (if-let [updates (parse-message (:body message))]
       (do
         (sstate/add-status state (:room message) (:from message) updates)
-        (answer-message group-chat session message "standup update received"))
+        (ack-status-received group-chat session message updates))
       (answer-message group-chat session message "That didn't look like a standup update..."))))
 
 (defn- status-ready?
