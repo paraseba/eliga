@@ -2,8 +2,7 @@
   (:require [clojure.test :refer :all]
             [paraseba.eliga.bot :refer :all]
             [paraseba.eliga.standup-bot :as standup]
-            )
-  )
+            [simple-time.core :as stime]))
 
 (deftype StubHipchat [state]
   GroupChat
@@ -67,6 +66,23 @@
 
     (is @done?)))
 
+(deftest sending-reminders
+  (let [config {:standup-time (stime/timespan 9 45 0) :reminders [30 10]}
+        state {:sent-reminders []}]
+    (with-redefs [stime/today #(stime/datetime 2014 2 10 0 0 0)
+                  stime/now #(stime/+ (stime/today) (stime/timespan 8 0 0))]
+      (is (= (standup/next-reminder-time config state)
+             (stime/+ (stime/today) (stime/timespan 9 15 0)))))))
+
+(comment
+
+  (stime/+ (stime/today) (stime/timespan 9 15 0))
+
+  (stime/today)
+
+  (sending-reminders)
+
+  )
 
 (comment
   (is (= (last (get-all-messages group-chat "team"))
