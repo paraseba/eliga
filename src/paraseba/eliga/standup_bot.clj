@@ -44,11 +44,9 @@
 (defn- apply-message!
   [group-chat session state message]
   (when (:mention? message)
-    (if-let [updates (parse-message (:body message))]
-      (do
-        (sstate/add-status state (:room message) (:from message) updates)
-        (ack-status-received group-chat session message updates))
-      (answer-message group-chat session message "That didn't look like a standup update..."))))
+    (when-let [updates (parse-message (:body message))]
+      (sstate/add-status state (:room message) (:from message) updates)
+      (ack-status-received group-chat session message updates))))
 
 (defn- status-ready?
   [[_ status]]

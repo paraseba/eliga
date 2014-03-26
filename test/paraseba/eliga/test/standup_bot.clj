@@ -41,7 +41,7 @@
         session (connect group-chat {:user {:id "nico" :name "Nicolas"}} noop)]
     (write group-chat session "team" "@eliga how are you?")
     (is (= (last (get-all-messages group-chat "team"))
-           {"eliga" "@nico That didn't look like a standup update..."}))
+           {"nico" "@eliga how are you?"}))
     (write group-chat session "team" "@eliga #yesterday Way too much")
     (is (= (last (get-all-messages group-chat "team"))
            {"eliga" "@nico #yesterday update received"}))
