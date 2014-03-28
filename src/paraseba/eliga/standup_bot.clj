@@ -108,9 +108,9 @@
             :rooms ["98902_eliga"] :nick "Eliga bot"
             :api-token "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P"
             :on-ready (fn [session statuses]
-                        (bot/write hipchat session "98902_eliga"
-                                   (format-standup-message statuses "my team"
-                                                           identity ))
+                        (bot/broadcast hipchat session "98902_eliga"
+                                       (format-standup-message statuses "my team"
+                                                               identity ))
                         (send-standup-email statuses "my team" identity
                                             {:host "mailtrap.io"
                                              :port 2525

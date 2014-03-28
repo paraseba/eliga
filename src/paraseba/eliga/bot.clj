@@ -1,9 +1,10 @@
 (ns paraseba.eliga.bot
   (:require [clj-http.client :as http]
-            [clojure.string :as string])
+            [clojure.string :as string]
+            [clojure.walk :refer [keywordize-keys]])
   (:import org.jivesoftware.smack.XMPPConnection
            org.jivesoftware.smackx.muc.MultiUserChat
-           org.jivesoftware.smack.PacketListener
+           (org.jivesoftware.smack PacketListener)
            org.jivesoftware.smack.keepalive.KeepAliveManager))
 
 (defn- enter-room [{:keys [connection nick password] :as bot} room-name]
@@ -16,11 +17,12 @@
               (.join nick password))))
 
 (defn- user-details [token user-id]
-  (:body
-    (http/get (str "https://api.hipchat.com/v2/user/"
-                   (last (string/split user-id #"_")))
-              {:as :json
-               :query-params {:auth_token token}})))
+  (-> (http/get (str "https://api.hipchat.com/v2/user/"
+                     (last (string/split user-id #"_")))
+                {:as :json
+                 :query-params {:auth_token token}})
+      :body
+      keywordize-keys))
 
 (defn- extract-name [s]
   (last (string/split s #"/")))
@@ -43,7 +45,7 @@
 
 (defn- process-packet [bot room packet]
   (let [msg (packet->message
-              (-> bot :user-details :mention_name)
+              (-> bot :user-details :mention-name)
               packet)]
     (when (handle? msg bot)
       ((:handler bot) bot (assoc msg :room room)))))
@@ -72,13 +74,25 @@
   (.disconnect (:connection bot)))
 
 (defn group-chat [bot room msg]
+  (prn bot)
   (.sendMessage (-> bot :chats (get room)) msg))
 
+(defn send-message [{:keys [connection api-token]} user msg]
+  (let [details (user-details api-token user)]
+    (.sendMessage (.createChat (.getChatManager connection) (:xmpp-jid details)
+                               nil)
+                  msg)))
 
 (defprotocol GroupChat
+   ;; handler is a function that takes
+   ;; session and a message map with shape
+   ;; {:from "user-name"
+   ;;  :body "message body"
+   ;;  :mention? false}
   (connect [this config handler])
   (disconnect [this session])
-  (write [this session room msg]))
+  (broadcast [this session room msg])
+  (private-message [this session user msg]))
 
 (deftype Hipchat []
   GroupChat
@@ -88,8 +102,11 @@
   (disconnect [_ session]
     (stop-bot session))
 
-  (write [_ session room msg]
-   (group-chat session room msg)))
+  (broadcast [_ session room msg]
+   (group-chat session room msg))
+
+  (private-message [_ session user msg]
+    (send-message session user msg)))
 
 
 (comment
@@ -100,5 +117,24 @@
                           (group-chat bot (:room message)
                                       (str "Te escuche " (:from message) ": "
                                            (:body message))))))
+
+  (def hipchat (Hipchat.))
+  (def mybot (connect hipchat
+                      {:user "98902_725271" :password "thebot"
+                       :rooms ["98902_eliga"] :nick "Eliga bot"
+                       :api-token "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P"}
+                      (fn [bot message]
+                        (group-chat bot (:room message)
+                                    (str "Te escuche " (:from message) ": "
+                                         (:body message))))))
+  (broadcast hipchat mybot "98902_eliga" "hola")
+  (private-message hipchat mybot "Nicolás Berger" "hola")
+  (private-message hipchat mybot "NicolásBerger" "hola")
+  (private-message hipchat mybot "nicoberger@gmail.com" "hola")
+  (private-message hipchat mybot "98902_725263" "hola")
+  (private-message hipchat mybot "98902_725263@chat.hipchat.com" "chau")
+
+
+(user-details "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P" "nicoberger@gmail.com" )
 
   )
