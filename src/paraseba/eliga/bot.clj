@@ -74,7 +74,6 @@
   (.disconnect (:connection bot)))
 
 (defn group-chat [bot room msg]
-  (prn bot)
   (.sendMessage (-> bot :chats (get room)) msg))
 
 (defn send-message [{:keys [connection api-token]} user msg]
@@ -103,7 +102,7 @@
     (stop-bot session))
 
   (broadcast [_ session room msg]
-   (group-chat session room msg))
+    (group-chat session room msg))
 
   (private-message [_ session user msg]
     (send-message session user msg)))
