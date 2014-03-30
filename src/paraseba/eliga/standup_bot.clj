@@ -27,12 +27,26 @@
   (parse-message "@eliga #today everything")
   (parse-message "@eliga #today idk #today everything")
   (parse-message "@eliga #today idk #yesterday everything")
+  (parse-message "@eliga sending an invalid update")
   )
 
+(defn- answer-message
+  [group-chat session message answer]
+  (let [user-handle (str "@" (:from message))]
+    (bot/write group-chat session (:room message) (str user-handle " " answer))))
+
+(defn- ack-status-received
+  [group-chat session message updates]
+  (let [update-titles (map #(str "#" (name %)) (-> updates keys sort reverse))]
+    (answer-message group-chat session message
+                    (str (clojure.string/join " & " update-titles) " update received"))))
+
 (defn- apply-message!
-  [state message]
+  [group-chat session state message]
   (when (:mention? message)
-    (sstate/add-status state (:room message) (:from message) (parse-message (:body message)))))
+    (when-let [updates (parse-message (:body message))]
+      (sstate/add-status state (:room message) (:from message) updates)
+      (ack-status-received group-chat session message updates))))
 
 (defn- status-ready?
   [[_ status]]
@@ -87,7 +101,7 @@
   (let [state (sstate/empty-memory-standup-state)]
     (bot/connect group-chat config
                 (fn [session message]
-                  (apply-message! state message)
+                  (apply-message! group-chat session state message)
                   (when (standup-ready? users (sstate/standup-as-map state (-> config :rooms first)))
                     ((:on-ready config) session (sstate/standup-as-map state (-> config :rooms first)))
                     (sstate/standup-done state (-> config :rooms first)))))))
