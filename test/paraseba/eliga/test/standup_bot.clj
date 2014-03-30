@@ -30,11 +30,13 @@
          session
          {:from from :body msg :mention? (mentioned? to msg) :room room}))))
 
-  (private-message [this {:keys [config handler] :as session} user msg]
+  (private-message [this {:keys [config]} user msg]
     (let [from (-> config :user :id)
-          to user]
+          to user
+          to-session (-> state deref :sessions (get to))
+          to-handler (:handler to-session)]
       (swap! state update-in [:messages #{from to}] conj {from msg})
-      (handler session {:from from :body msg :mention? (mentioned? to msg)}))))
+      (to-handler to-session {:from from :body msg :to to :mention? (mentioned? to msg)}))))
 
 (defn get-all-messages [hipchat room]
   (-> hipchat .state deref :messages (get room) reverse))
@@ -57,6 +59,9 @@
     (broadcast group-chat session "team" "@eliga #yesterday Way too much")
     (is (= (last (get-all-messages group-chat #{"eliga" "nico"}))
            {"eliga" "#yesterday update received"}))
+    (private-message group-chat session "eliga" "#today I'll do some stuff")
+    (is (= (last (get-all-messages group-chat #{"eliga" "nico"}))
+           {"eliga" "#today update received"}))
     (broadcast group-chat session "team" "@eliga #yesterday Way too much #today I'll work on that bug")
     (is (= (last (get-all-messages group-chat #{"eliga" "nico"}))
            {"eliga" "#yesterday & #today update received"}))))
