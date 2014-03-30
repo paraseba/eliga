@@ -3,6 +3,8 @@
 A Hipchat bot to gather standup status updates, process them, format them, and
 resend them via Hipchat or email, etc
 
+[![Build Status](https://travis-ci.org/paraseba/eliga.svg?branch=master)](https://travis-ci.org/paraseba/eliga)
+
 ## Features
 
 - Seats on hipchat listening to users updates
