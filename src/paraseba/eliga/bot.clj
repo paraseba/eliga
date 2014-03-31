@@ -1,7 +1,6 @@
 (ns paraseba.eliga.bot
   (:require [clj-http.client :as http]
-            [clojure.string :as string]
-            [clojure.walk :refer [keywordize-keys]])
+            [clojure.string :as string])
   (:import org.jivesoftware.smack.XMPPConnection
            org.jivesoftware.smackx.muc.MultiUserChat
            (org.jivesoftware.smack PacketListener)
@@ -21,8 +20,7 @@
                      (last (string/split user-id #"_")))
                 {:as :json
                  :query-params {:auth_token token}})
-      :body
-      keywordize-keys))
+      :body))
 
 (defn- extract-name [s]
   (last (string/split s #"/")))
@@ -45,7 +43,7 @@
 
 (defn- process-packet [bot room packet]
   (let [msg (packet->message
-              (-> bot :user-details :mention-name)
+              (-> bot :user-details :mention_name)
               packet)]
     (when (handle? msg bot)
       ((:handler bot) bot (assoc msg :room room)))))
@@ -77,9 +75,12 @@
   (.sendMessage (-> bot :chats (get room)) msg))
 
 (defn send-message [{:keys [connection api-token]} user msg]
-  (let [details (user-details api-token user)]
-    (.sendMessage (.createChat (.getChatManager connection) (:xmpp-jid details)
-                               nil)
+  (let [details (user-details api-token user)
+        jid (:xmpp_jid details)]
+    (assert (string? jid))
+    (.sendMessage (.createChat (.getChatManager connection)
+                          jid
+                          nil)
                   msg)))
 
 (defprotocol GroupChat
@@ -133,6 +134,7 @@
   (private-message hipchat mybot "98902_725263" "hola")
   (private-message hipchat mybot "98902_725263@chat.hipchat.com" "chau")
 
+  (disconnect hipchat mybot)
 
 (user-details "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P" "nicoberger@gmail.com" )
 
