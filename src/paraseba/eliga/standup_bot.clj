@@ -111,10 +111,11 @@
 (comment
 
   (def hipchat (bot/->Hipchat))
+  (def users [{:id 725263 :name "Nicolás Berger"}])
   (def session
-    (start hipchat  ["Sebastian Galkin" "Nicolás Berger"]
-           {:user "98902_725271" :password "thebot"
-            :rooms ["98902_eliga"] :nick "Eliga bot"
+    (start hipchat (map :id users)
+           {:user-id "725271" :password "thebot"
+            :rooms ["98902_eliga"]
             :api-token "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P"
             :on-ready (fn [session statuses]
                         (bot/broadcast hipchat session "98902_eliga"
@@ -129,11 +130,5 @@
                                              :from "eliga@example.com"}))}))
 
   (bot/disconnect hipchat session)
-
-  (def mybot (start-bot
-               (fn [bot message]
-                 (group-chat bot (:room message)
-                             (str "Te escuche " (:from message) ": "
-                                  (:body message))))))
 
   )

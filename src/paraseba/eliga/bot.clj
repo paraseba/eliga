@@ -6,26 +6,45 @@
            (org.jivesoftware.smack PacketListener)
            org.jivesoftware.smack.keepalive.KeepAliveManager))
 
-(defn- enter-room [{:keys [connection nick password] :as bot} room-name]
+(defn- enter-room [{:keys [connection user-details password] :as bot} room-name]
   (assoc-in bot [:chats room-name]
             (doto (MultiUserChat.
                     connection
                     (if (.endsWith room-name "@conf.hipchat.com")
                       room-name
                       (str room-name "@conf.hipchat.com")))
-              (.join nick password))))
+              (.join (:name user-details) password))))
 
-(defn- user-details [token user-id]
-  (-> (http/get (str "https://api.hipchat.com/v2/user/"
-                     (last (string/split user-id #"_")))
+(defn- user-details
+  "token: Hipchat api token
+   user: id, email or mention_name"
+  [token user-id]
+  (-> (http/get (str "https://api.hipchat.com/v2/user/" user-id)
                 {:as :json
                  :query-params {:auth_token token}})
       :body))
+
+(defn- find-users-in-room
+  "token: Hipchat api token
+   room: id or name
+   returns list of users, with shape
+   [{:id id :name name :mention_name mention_name} ... {...}]"
+  [token room]
+  (let [room-name (last (string/split room #"_"))
+        api-url (str "https://api.hipchat.com/v2/room/" room-name)]
+  (-> (http/get api-url
+                {:as :json
+                 :query-params {:auth_token token}})
+      :body
+      :participants))
+  )
 
 (defn- extract-name [s]
   (last (string/split s #"/")))
 
 (defn mentioned?
+  "mention-name: user's mention_name
+   message: a message where to look for @mention-name"
   [mention-name message]
   (re-find (java.util.regex.Pattern/compile
              (str "(^|\\s+)@" mention-name "(\\s+|$)"))
@@ -39,19 +58,31 @@
                (mentioned? mention-name (.getBody packet)))})
 
 (defn- handle? [msg bot]
-  (not (= (:from msg) (:nick bot))))
+  (not (= (:from msg) (-> bot :user-details :name))))
+
+(defn- find-user-in-room-by-name
+  [api-token user-name room]
+  (->> (find-users-in-room api-token room)
+      (filter #(= (:name %) user-name))
+      first))
 
 (defn- process-packet [bot room packet]
   (let [msg (packet->message
               (-> bot :user-details :mention_name)
               packet)]
     (when (handle? msg bot)
-      ((:handler bot) bot (assoc msg :room room)))))
+      (let [from (find-user-in-room-by-name (:api-token bot)
+                                    (:from msg)
+                                    room)]
+      ((:handler bot) bot (assoc msg
+                                 :room room
+                                 :from (:id from)))))))
 
-(defn start-bot [{:keys [nick user password rooms api-token] :as config} handler]
-  (let [connection (doto (XMPPConnection. "chat.hipchat.com")
+(defn start-bot [{:keys [user-id password rooms api-token] :as config} handler]
+  (let [user-details (user-details api-token user-id)
+        connection (doto (XMPPConnection. "chat.hipchat.com")
                      .connect
-                     (.login user password "bot"))
+                     (.login (:xmpp_jid user-details) password "bot"))
         pingmanager (doto (KeepAliveManager/getInstanceFor connection)
                       (.setPingInterval 60000))
         bot (reduce enter-room
@@ -59,7 +90,7 @@
                            :handler handler
                            :connection connection
                            :ping-manager pingmanager
-                           :user-details (user-details api-token user))
+                           :user-details user-details)
                     rooms)]
     (doseq [[chat room] (map vector (vals (:chats bot)) rooms)]
       (.addMessageListener chat
@@ -110,32 +141,28 @@
 
 
 (comment
-  (def mybot (start-bot {:user "98902_725271" :password "thebot"
-                         :rooms ["98902_eliga"] :nick "Eliga bot"
-                         :api-token "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P"}
-                        (fn [bot message]
-                          (group-chat bot (:room message)
-                                      (str "Te escuche " (:from message) ": "
-                                           (:body message))))))
 
   (def hipchat (Hipchat.))
   (def mybot (connect hipchat
-                      {:user "98902_725271" :password "thebot"
-                       :rooms ["98902_eliga"] :nick "Eliga bot"
+                      {:user-id "725271" :password "thebot"
+                       :rooms ["98902_eliga"]
                        :api-token "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P"}
                       (fn [bot message]
                         (group-chat bot (:room message)
                                     (str "Te escuche " (:from message) ": "
                                          (:body message))))))
+
   (broadcast hipchat mybot "98902_eliga" "hola")
-  (private-message hipchat mybot "Nicolás Berger" "hola")
-  (private-message hipchat mybot "NicolásBerger" "hola")
+  (private-message hipchat mybot "@NicolasBerger" "hola")
   (private-message hipchat mybot "nicoberger@gmail.com" "hola")
-  (private-message hipchat mybot "98902_725263" "hola")
-  (private-message hipchat mybot "98902_725263@chat.hipchat.com" "chau")
+  (private-message hipchat mybot "725263" "hola")
 
   (disconnect hipchat mybot)
 
-(user-details "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P" "nicoberger@gmail.com" )
+  (user-details "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P" "nicoberger@gmail.com" )
+  (user-details "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P" "@NicolasBerger" )
+  (user-details "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P" 725263 )
+  (find-users-in-room "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P" "eliga" )
+  (find-user-in-room-by-name "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P" "Nicolás Berger" "eliga")
 
   )
