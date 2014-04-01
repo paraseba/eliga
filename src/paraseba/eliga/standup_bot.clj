@@ -3,6 +3,7 @@
   (:require
     [clojure.string :as string]
     [postal.core :as postal]
+    [simple-time.core :as stime]
     [paraseba.eliga.bot :as bot]
     [paraseba.eliga.standup-state :as sstate]))
 
@@ -82,6 +83,16 @@
                             :to (:to email-config)
                             :subject subject
                             :body body})))
+
+(defn next-reminder-time
+  [config state]
+  (let [reminder-times (map #(stime/- (:standup-time config) (stime/timespan 0 % 0)) (:reminders config))
+        time-now (stime/- (stime/now) (stime/today))]
+    (->> reminder-times
+         sort
+         (filter #(stime/> % time-now))
+         first
+         (stime/+ (stime/today)))))
 
 (defn start [group-chat users config]
   (let [state (sstate/empty-memory-standup-state)]
