@@ -19,6 +19,7 @@
   "token: Hipchat api token
    user: id, email or mention_name"
   [token user-id]
+  (assert token)
   (-> (http/get (str "https://api.hipchat.com/v2/user/" user-id)
                 {:as :json
                  :query-params {:auth_token token}})
@@ -32,6 +33,7 @@
   [token room]
   (let [room-name (last (string/split room #"_"))
         api-url (str "https://api.hipchat.com/v2/room/" room-name)]
+  (assert token)
   (-> (http/get api-url
                 {:as :json
                  :query-params {:auth_token token}})
@@ -123,7 +125,8 @@
   (connect [this config handler])
   (disconnect [this session])
   (broadcast [this session room msg])
-  (private-message [this session user msg]))
+  (private-message [this session user msg])
+  (find-user [this session user-id]))
 
 (deftype Hipchat []
   GroupChat
@@ -137,7 +140,10 @@
     (group-chat session room msg))
 
   (private-message [_ session user msg]
-    (send-message session user msg)))
+    (send-message session user msg))
+
+  (find-user [_ session user-id]
+    (user-details (:api-token session) user-id)))
 
 
 (comment
@@ -159,6 +165,7 @@
 
   (disconnect hipchat mybot)
 
+  (find-user hipchat mybot "nicoberger@gmail.com" )
   (user-details "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P" "nicoberger@gmail.com" )
   (user-details "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P" "@NicolasBerger" )
   (user-details "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P" 725263 )

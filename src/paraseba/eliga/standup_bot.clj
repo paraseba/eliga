@@ -112,6 +112,11 @@
 
   (def hipchat (bot/->Hipchat))
   (def users [{:id 725263 :name "Nicolás Berger"}])
+  (defn find-user-name
+    [group-chat session user-id]
+    (:name (bot/find-user group-chat session user-id)))
+
+
   (def session
     (start hipchat (map :id users)
            {:user-id "725271" :password "thebot"
@@ -120,8 +125,8 @@
             :on-ready (fn [session statuses]
                         (bot/broadcast hipchat session "98902_eliga"
                                        (format-standup-message statuses "my team"
-                                                               identity ))
-                        (send-standup-email statuses "my team" identity
+                                                               (partial find-user-name hipchat session)))
+                        (send-standup-email statuses "my team" (partial find-user-name hipchat session)
                                             {:host "mailtrap.io"
                                              :port 2525
                                              :user "eliga-3ebf39ee87f3a841"
