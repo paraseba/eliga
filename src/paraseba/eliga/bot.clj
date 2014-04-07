@@ -3,7 +3,7 @@
             [clojure.string :as string])
   (:import org.jivesoftware.smack.XMPPConnection
            org.jivesoftware.smackx.muc.MultiUserChat
-           (org.jivesoftware.smack PacketListener)
+           (org.jivesoftware.smack PacketListener MessageListener ChatManagerListener)
            org.jivesoftware.smack.keepalive.KeepAliveManager))
 
 (defn- enter-room [{:keys [connection user-details password] :as bot} room-name]
@@ -59,6 +59,18 @@
    :mention? (boolean
                (mentioned? mention-name (.getBody packet)))})
 
+(defn- chat-id->user-id [chat-id]
+  (-> chat-id
+      (string/split #"@")
+      first
+      (string/split #"_")
+      last
+      Integer/parseInt))
+
+(defn- chat-message->message [chat-message]
+  {:from (chat-id->user-id (.getFrom chat-message))
+   :body (.getBody chat-message)})
+
 (defn- handle? [msg bot]
   (not (= (:from msg) (-> bot :user-details :name))))
 
@@ -80,6 +92,20 @@
                                  :room room
                                  :from (:id from)))))))
 
+(defn- process-chat-message
+  [{:keys [handler user-details] :as bot} chat-message]
+  (let [msg (chat-message->message chat-message)]
+    (when (:body msg)
+      (handler bot (assoc msg
+                          :to (:id user-details))))))
+
+(defn- subscribe-to-chat
+  [bot chat]
+  (.addMessageListener chat
+                       (reify MessageListener
+                         (processMessage [this chat message]
+                           (process-chat-message bot message)))))
+
 (defn start-bot [{:keys [user-id password rooms api-token] :as config} handler]
   (let [user-details (user-details api-token user-id)
         connection (doto (XMPPConnection. "chat.hipchat.com")
@@ -99,6 +125,11 @@
                            (reify PacketListener
                              (processPacket [this packet]
                                (process-packet bot room packet)))))
+    (-> connection
+        .getChatManager
+        (.addChatListener (reify ChatManagerListener
+                            (chatCreated [this chat createdLocally]
+                              (subscribe-to-chat bot chat)))))
     bot))
 
 (defn stop-bot [bot]
@@ -154,9 +185,13 @@
                        :rooms ["98902_eliga"]
                        :api-token "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P"}
                       (fn [bot message]
-                        (group-chat bot (:room message)
-                                    (str "Te escuche " (:from message) ": "
-                                         (:body message))))))
+                        (if-let [room (:room message)]
+                          (group-chat bot (:room message)
+                                      (str "Te escuche " (:from message) ": "
+                                           (:body message)))
+                          (send-message bot (:from message)
+                                           (str "Te escuche " (:from message) ": "
+                                                (:body message)))))))
 
   (broadcast hipchat mybot "98902_eliga" "hola")
   (private-message hipchat mybot "@NicolasBerger" "hola")

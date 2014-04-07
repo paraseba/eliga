@@ -38,11 +38,11 @@
 
 (defn- apply-message!
   [group-chat session state message]
-  (when (or (= (:to message) (-> session :config :user :id))
+  (when (or (= (:to message) (-> session :user-details :id))
             (:mention? message))
     (when-let [updates (parse-message (:body message))]
       ; TODO: define a better rule to get the standup-id
-      (sstate/add-status state (or (:room message) (-> session :config :rooms first)) (:from message) updates)
+      (sstate/add-status state (or (:room message) (-> session :rooms first)) (:from message) updates)
       (ack-updates-received group-chat session (:from message) updates))))
 
 (defn- status-ready?
