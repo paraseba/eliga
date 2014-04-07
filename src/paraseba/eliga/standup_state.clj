@@ -9,7 +9,7 @@
 (deftype MemoryStandupState [state]
   StandupState
   (add-status [_ standup-id user status-data]
-    (assert (string? user))
+    (assert (or (string? user) (number? user)))
     (assert (not (empty? status-data)))
     (assert (every? #(string? (:message %)) (vals status-data)))
     (assert (every? #(instance? DateTime (:timestamp %)) (vals status-data)))
@@ -24,9 +24,9 @@
 
 (comment
 
-  (-> (empty-memory-standup-state) ( add-status "foo-bar" "nico" {})) 
+  (-> (empty-memory-standup-state) ( add-status "foo-bar" "nico" {}))
 
-  (-> ( empty-memory-standup-state) ( standup-done "foo-bar" )) 
-  
-  
+  (-> ( empty-memory-standup-state) ( standup-done "foo-bar" ))
+
+
   )

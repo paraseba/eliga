@@ -27,12 +27,23 @@
   (parse-message "@eliga #today everything")
   (parse-message "@eliga #today idk #today everything")
   (parse-message "@eliga #today idk #yesterday everything")
+  (parse-message "@eliga sending an invalid update")
   )
 
+(defn- ack-updates-received
+  [group-chat session to updates]
+  (let [update-titles (map #(str "#" (name %)) (-> updates keys sort reverse))
+        message (str (clojure.string/join " & " update-titles) " update received")]
+    (bot/private-message group-chat session to message)))
+
 (defn- apply-message!
-  [state message]
-  (when (:mention? message)
-    (sstate/add-status state (:room message) (:from message) (parse-message (:body message)))))
+  [group-chat session state message]
+  (when (or (= (:to message) (-> session :user-details :id))
+            (:mention? message))
+    (when-let [updates (parse-message (:body message))]
+      ; TODO: define a better rule to get the standup-id
+      (sstate/add-status state (or (:room message) (-> session :rooms first)) (:from message) updates)
+      (ack-updates-received group-chat session (:from message) updates))))
 
 (defn- status-ready?
   [[_ status]]
@@ -87,7 +98,7 @@
   (let [state (sstate/empty-memory-standup-state)]
     (bot/connect group-chat config
                 (fn [session message]
-                  (apply-message! state message)
+                  (apply-message! group-chat session state message)
                   (when (standup-ready? users (sstate/standup-as-map state (-> config :rooms first)))
                     ((:on-ready config) session (sstate/standup-as-map state (-> config :rooms first)))
                     (sstate/standup-done state (-> config :rooms first)))))))
@@ -102,16 +113,22 @@
 (comment
 
   (def hipchat (bot/->Hipchat))
+  (def users [{:id 725263 :name "Nicolás Berger"}])
+  (defn find-user-name
+    [group-chat session user-id]
+    (:name (bot/find-user group-chat session user-id)))
+
+
   (def session
-    (start hipchat  ["Sebastian Galkin" "Nicolás Berger"]
-           {:user "98902_725271" :password "thebot"
-            :rooms ["98902_eliga"] :nick "Eliga bot"
+    (start hipchat (map :id users)
+           {:user-id "725271" :password "thebot"
+            :rooms ["98902_eliga"]
             :api-token "qjs7ceXYKzlzcARCj5GvrHoYhYG1ySLkDliZQd9P"
             :on-ready (fn [session statuses]
                         (bot/broadcast hipchat session "98902_eliga"
                                        (format-standup-message statuses "my team"
-                                                               identity ))
-                        (send-standup-email statuses "my team" identity
+                                                               (partial find-user-name hipchat session)))
+                        (send-standup-email statuses "my team" (partial find-user-name hipchat session)
                                             {:host "mailtrap.io"
                                              :port 2525
                                              :user "eliga-3ebf39ee87f3a841"
@@ -120,11 +137,5 @@
                                              :from "eliga@example.com"}))}))
 
   (bot/disconnect hipchat session)
-
-  (def mybot (start-bot
-               (fn [bot message]
-                 (group-chat bot (:room message)
-                             (str "Te escuche " (:from message) ": "
-                                  (:body message))))))
 
   )

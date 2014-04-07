@@ -30,17 +30,41 @@
          session
          {:from from :body msg :mention? (mentioned? to msg) :room room}))))
 
-  (private-message [this {:keys [config handler] :as session} user msg]
+  (private-message [this {:keys [config]} user msg]
     (let [from (-> config :user :id)
-          to user]
+          to user
+          to-session (-> state deref :sessions (get to))
+          to-handler (:handler to-session)]
       (swap! state update-in [:messages #{from to}] conj {from msg})
-      (handler session {:from from :body msg :mention? true}))))
+      (to-handler to-session {:from from :body msg :to to :mention? (mentioned? to msg)}))))
 
 (defn get-all-messages [hipchat room]
   (-> hipchat .state deref :messages (get room) reverse))
 
 (defn stub-hipchat []
   (->StubHipchat (atom {})))
+
+(defn- noop [& _])
+
+(deftest acknowledge-message
+  (let [group-chat (stub-hipchat)
+        bot (standup/start group-chat
+                           ["nico"]
+                           {:rooms ["team"] :user {:id "eliga" :name "Eliga"}
+                            :on-ready noop})
+        session (connect group-chat {:user {:id "nico" :name "Nicolas"}} noop)]
+    (broadcast group-chat session "team" "@eliga how are you?")
+    (is (= (last (get-all-messages group-chat "team"))
+           {"nico" "@eliga how are you?"}))
+    (broadcast group-chat session "team" "@eliga #yesterday Way too much")
+    (is (= (last (get-all-messages group-chat #{"eliga" "nico"}))
+           {"eliga" "#yesterday update received"}))
+    (private-message group-chat session "eliga" "#today I'll do some stuff")
+    (is (= (last (get-all-messages group-chat #{"eliga" "nico"}))
+           {"eliga" "#today update received"}))
+    (broadcast group-chat session "team" "@eliga #yesterday Way too much #today I'll work on that bug")
+    (is (= (last (get-all-messages group-chat #{"eliga" "nico"}))
+           {"eliga" "#yesterday & #today update received"}))))
 
 (deftest standup-info-gathering
   (let [group-chat (stub-hipchat)
@@ -65,7 +89,6 @@
                                      "foo did X"))
                               (is (= (-> statuses (get "foo") :today :message)
                                      "foo will do Y")))})
-        noop (fn [& _])
         nico-session (connect group-chat {:user {:id "nico" :name "Nicolas Foo"}} noop)
         seba-session (connect group-chat {:user {:id "seba" :name "Sebastian Bar"}} noop)
         foo-session  (connect group-chat {:user {:id "foo" :name "Foo Bar"}} noop)]
@@ -78,7 +101,6 @@
     (broadcast group-chat foo-session  "team" "@eliga #yesterday foo did X #today foo will do Y")
 
     (is @done?)))
-
 
 (comment
   (is (= (last (get-all-messages group-chat "team"))
@@ -99,6 +121,8 @@
   (.printStackTrace *e)
 
   (standup-info-gathering)
+
+  (acknowledge-message)
 
   (let [hipchat (stub-hipchat)
         nico-session (connect hipchat {:user {:id "nico" :name "Nicolas Foo"}} (fn [& rest] (prn "hola" rest)))
